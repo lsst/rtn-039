@@ -16,7 +16,7 @@
 % \setDocSubtitle{A subtitle}
 
 \author{%
-Brian Yanny
+Brian Yanny, Nikolay Kuropatkin, Huan Lin, Jennifer Adelman-McCarthy, Colin Slater, Hsin-Fang Chiang
 }
 
 \setDocRef{RTN-039}
@@ -50,6 +50,119 @@ Summary of cpu-time, memory, storage of DP0.2 production run in iDF.
 % ADD CONTENT HERE
 % You can also use the \input command to include several content files.
 
+\section{Introduction and Scope of DP0.2}
+
+DP0.2 (Data Preview 0.2) consisted of the (re)processing of a 
+set of approximately 20,000 Rubin camera simulated exposures (each with up to
+189 detectors per exposure) covering 157 tracts 
+(\sim 300 square degrees) in 6 filters ($ugrizy$) to a typical 
+depth of half that of the full survey.  These 20K visits represent 
+approximately 10 nights of data gathering, roughly 1% of the 
+full survey.
+
+Processing of the DESC-generated DC-2 simulated dataset \citep{DESC} took place between Dec 18, 2021 and May 16, 2022.  Processing took place in a Google Cloud environment, named the iDF (Interim Data Facility).  In excess of 4,000 cores
+were available in a number of queues and memory/core configurations
+within the cloud production environment.  The total cpu usage over the 
+course of DP0.2 was approximately 2.5M core-hours. Storage was provided 
+in the form of S3 addressable object storage space.  At peak, the production 
+used 3.3 PiB of object store. After removal of intermediate data products
+(Warp images and intermediate single epoch CCD images), the final storage
+in the S3 data store at the end of DP0.2 production amounted to approximately
+2.55 PiB. 
+
+The scope of production consisted of running seven pipeline steps. Each step
+was in turn made up of one or more pipetasks.   Before production
+started, the 20K raw exposures/visits were pre-loaded into S3 storage, along
+with dimension and URI metadata in a common butler registry, 
+used for all processing.  
+
+A Skymap and Photometric solutions for the 
+raw exposures were also provided ahead of time -- these were not created
+as part of the DP0.2 processing.
+
+After processing was complete, a copy of the large butler registry was made
+for end user access and HiPS (large-format zoomable, pannable) image maps 
+of the tracts were generated. Also, the detected and measured output object 
+and source tables were put into a qServ database for collaboration
+access.  These Butler copy, HiPS creation and qServ loading operations
+are not included in the compute resources tabulated here. 
+
+\section{Software Configuration}
+
+The versions of the LSST software environment used for production were
+based on 'v23' of the lsst distribution.  After the start of step 1 processingA number of updates to
+the software occured to address issues encountered during processing
+and this resulted in the small revision numbers of the 'v23' distribution
+to change during DP0.2.
+
+The workflow software system was \cite{PanDA}, and the 
+BPS (Batch Processing Service) software 
+(part of the LSST distribution) was used interface between the Butler 
+using a set of job submission files 
+(one for each group of each step of processing, see below)
+and the PanDA system. In addition, the Google Cloug logging system was
+used to collect logging information output by the production pipelines and
+organize it into a searchable form.
+
+\section{Processing Groups and clustering directives}
+
+Each step of the seven step processing flow for DP0.2 
+(modeled on the eventual Data Release Production (DRP) system 
+planned for regular daily and annual Rubin processing) consists of a well
+defined, ordered list of pipeline tasks run on either a set of 
+single or dual exposure visits (steps 1,2,4,6) or on 
+coadd tracts (steps 3, 5, 7) (and their associated visits).  
+
+The BPS system takes as input a yaml file. The yaml files used during DP0.2 are archived at: \url{https://github.com/lsst-dm/dp02-processing/tree/main/full/production}.  As step 1 production commenced it was determined that an arbitrarily
+large number of quanta could not be successfully processed with a single
+BPS submission.  For example, step 1 production runs five pipetasks on 
+20K visits, where each visit consists of typically 150 detector images,
+thus resulting in 20K*150*5 = 15M individual quanta of processing for
+step 1.  
+
+A key component of the PanDA workflow system is the "Intelligent Data Delivery Service" (IDDS) which manages the scheduling of individual processing
+quanta to a set of processing cores. The BPS and step description yaml configurations guide the creation of a "quantum graph" which fully describes the job flow
+dependencies (what tasks depend on what other tasks being complete).  Also
+created at the same time as the quantum graph for each 'BPS submit', is a
+so-called 'execution butler' which contains file metadata and 
+URI information for all inputs needed to completely run a processing step.
+
+While one can define a single large DP0.2 step 1 BPS configuration yaml file,
+specifying all 20K visits to be processed, time and memory restrictions
+on the Butler and PanDa prevented successful completion of the implied 
+15M quanta processing in a single BPS submission.
+One issue was time to generate the quantum graph and execution butler was
+prohibitive, even after some speed ups to the process, it would still take
+days and many hundreds of GB to generate such quantum graphs and execution
+butlers.  Practically speaking, there is a limit of a few hours and a few GB
+for preparation of the quantum graph and execution butler.  
+
+A more serious limitation comes with the operation of the IDDS and how
+quanta are clustered (or not clustered).  The IDDS system has within it an $N^2$algorithm which matches jobs done to jobs-to-be-done.
+
+
+\begin{center}
+\begin{tabular} { |c|r|r|c|c|r|l|l|}
+\hline
+step & group by & N groups & start & end & core-hr & software & Note\\
+\hline
+step1 & visit/det & 14x3 &2022-12-18& 2022-01-12 & 166K & $\rm v23\_0\_0\_rc5$ &\\
+step2 & visit  & 14 & 2022-01-20& 2022-01-24 & 22K & $\rm v23\_0\_0\_rc5$ &\\
+step3 & tract & 33 & 2022-02-18& 2022-03-25 & 1100K & $\rm v23\_0\_1$ &\\
+step4 & visit & 40& 2022-04-01& 2022-04-30 & 1100K & $\rm v23\_0\_1\_rc4$ &\\
+step7 & all & 1 & 2022-05-01& 2022-05-01 & 10 & $\rm v23\_0\_2\_rc2$ &\\
+step5 & tract & 52 & 2022-05-03& 2022-05-12 & 66K & $\rm v23\_0\_2\_rc2$ &\\
+step6 & visit & 20&2022-05-12& 2022-05-16 & 16K & $\rm v23\_0\_2\_rc3$ &\\
+purge & exp/warp & 2 & 2022-04-01& 2022-05-30 & 10 & $\rm v23\_0\_2\_rc2$ & \\
+\hline
+total & 150d & & 2500K & &\\
+\hline
+\end{tabular}
+\end{center}
+
+
+
+
 \appendix
 % Include all the relevant bib files.
 % https://lsst-texmf.lsst.io/lsstdoc.html#bibliographies
@@ -62,9 +175,6 @@ Summary of cpu-time, memory, storage of DP0.2 production run in iDF.
 \input{acronyms.tex}
 % If you want glossary uncomment below -- comment out the two lines above
 %\printglossaries
-
-
-
 
 
 \end{document}
