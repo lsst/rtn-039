@@ -140,6 +140,68 @@ for preparation of the quantum graph and execution butler.
 A more serious limitation comes with the operation of the IDDS and how
 quanta are clustered (or not clustered).  The IDDS system has within it an $N^2$algorithm which matches jobs done to jobs-to-be-done.
 
+To use the Butler and PanDA workflow system in practice, some division of
+sets of pipetasks into groups is done.  Also, clustering sets of related, 
+isr,characterizeImage,calibrate,writeSourceTable,transformSourceTable
+one-after-the-other pipetasks (in step 1, for example the five pipetasks run on
+each exposure/detector in this order: {\bf isr} followed by 
+{\bf characterizeImage} followed by {\bf calibrate} followed by 
+{\bf writeSourceTable}) followed by  {\bf transformSourceTable}.  Since this
+dependence structure is fixed and invariant it helps to reduce the load 
+on IDDS, which generally checks all running jobs and tries to match up
+any done job and its outputs to any requested waiting-to-run job with the input that match the output just completed. Since the 
+order and set pipetasks is fixed and every output always flows to the
+next pipetask's input, IDDS need not try to match every possible pipetask b 
+to follow on from pipetask a, thus greatly reducing the number of possible
+combinations panDA IDDS needs to examine to determine which quanta with which
+inputs to run next through which job.  The named definition of clusters 
+of pipetasks used in DP0.2 processing are 
+given in {\bf clustering.yaml} files in 
+\url{https://github.com/lsst-dm/dp02-processing/tree/main/full/production} 
+for each step.  
+
+BPS submits in DP0.2 ran in the Google Cloud, and a set of 6 panDA job queues weere established with different retry characteristics and memory limits (cost
+to use computing in the cloud increased linearly with memory per job and also
+was a factor of several cheaper if the queue could be 'preempted' (forcing
+the job to run again from the start).  These queues are listed in \ref{tab:queues}. Due to this costing structure, cost efficient queue are 
+the pre-emptable low max memory queue, and the most expensive are the 
+non-preemptable high max memory queue. The default queue for BPS submits 
+is the {\bf GOOGLE$\_$TEST} (pre-emptable) queue and the vast majority 
+of jobs completed successfully in this queue.  The maximum number of
+retries allowed was set by default to be 5, and the usual reason for a 
+job to be retried was pre-emption.  If the job failed the same way 5 times
+typically this indicated a pipeline problem, and these cases were
+fed back to the pipeline development team.
+
+A few pipetasks required more than the usually amount of memory, and
+these tasks were assigned to a higher max memory queue.  Also, a few 
+related Q/A pipetasks occasionally required exceedingly long runtimes on
+selected quanta, these were handled by a special 'rescue' submit job,
+with its own bps submit yaml which indicated to the butler to only run
+on quanta which did not previously complete, and indicated to panDA to run
+in a special non-preemptable (NO PE) queue. The pipetasks which required 
+extra memory or no-preempt status for at least some quanta are listed in
+table \ref{tab:maxmem}.  Also listed in \ref{tab:maxmem} are typical
+maximum memory requirements for most quanta running through an indicated
+pipetask.
+
+Storage for DP0.2 inputs and outputs was done using a large S3 compatible
+(key= unique POSIX-style path+filename plus bucket prefix, value=pointer
+to bytes of a data file or table) object store.   The dataSetType names for
+the types of objects which used the bulk of the storage are listed in
+\ref{tab:storage1} and continued in \ref{tab:storage2}.  Also listed
+for each dataSetType are estimates of the number of objects of a given type,
+the typical size of a single object of that type (in MB), the total
+storage for objects of that type (in TB), and which step in the processing
+creates objects of that type.  Also, if a datasetType is 'transient', and 
+is not retained once the downstream pipetasks which make use of that
+datasetType are complete, the datasetType is marked with a 'D' in the 'Delete'
+column.  For example, an important retained datasetType are the {\bf calexp} objects, representing a single exposure/detector corrected and calibrated
+ccd image.  Each {\bf calexp} takes about 101 MB of space, and there are 2.8M 
+in the DP0.2 dataset (20,000 exposures times 150 detectors/exposure, on average gives 3M as a rough estimate).  Note that which the full LSST camera has 189
+detectors, for DP0.2, on average only 150 of these are present per exposure.
+
+
 
 \begin{center}
 \begin{tabular} { |c|r|r|c|c|r|l|l|}
@@ -157,6 +219,7 @@ purge & exp/warp & 2 & 2022-04-01& 2022-05-30 & 10 & $\rm v23\_0\_2\_rc2$ & \\
 \hline
 total & & & 150d & & 2500K &&\\
 \hline
+\label{tab:summarycpu}
 \end{tabular}
 \end{center}
 
@@ -173,6 +236,7 @@ $\rm DOMA\_LSST\_GOOGLE\_HIMEM\_NON\_PREEMPT$ & 40 & &\\
 $\rm DOMA\_LSST\_GOOGLE\_EXTRA\_HIMEM$ & 236 &  &\\
 $\rm DOMA\_LSST\_GOOGLE\_EXTRA\_HIMEM\_NON\_PREEMPT$ & 236 & &\\
 \hline
+\label{tab:queues}
 \end{tabular}
 \end{center}
 
@@ -210,6 +274,7 @@ matchCatalogsTract& 120000 & 236GB NO PE\\
 \hline
 consolidateForcedSourceOnDiaObjectTable& 18000& step 5 40 GB\\
 \hline
+\label{tab:maxmem}
 \end{tabular}
 \end{center}
 
@@ -243,6 +308,7 @@ TB& Nobj & MB/obj & step & D & dataSetType \\
 3.4&3.4M&1.0&step4&&	forced$\_$src\\
 3.4&2.8M&1.20&step1&&	sourceTable\\
 \hline
+\label{tab:storage1}
 \end{tabular}
 \end{center}
 
@@ -274,16 +340,16 @@ TB&Nobj&MB/Obj&step&D& DataSetType (continued)\\
 0&	1&316&step7&&	ccdVisitTable\\
 0&	1&2.4&step7&&	visitTable\\
 \hline
-0.4& 200 & 2000 & BPS &   & Ext Butler\\
+0.4& 200 & 2000 & BPS &   & Exec Butler\\
 0.22& 200 & 1100 & BPS &   & qgraph \\
 \hline
 3.4PB(1.9PB)& & & & & Total in S3 without(with) Deletes\\
 \hline
+\label{tab:storage2}
 \end{tabular}
 \end{center}
 
 D: DataSetType deleted from Butler and Storage
-
 
 \appendix
 % Include all the relevant bib files.
