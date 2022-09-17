@@ -29,6 +29,22 @@ Brian Yanny, Nikolay Kuropatkin, Huan Lin, Jennifer Adelman-McCarthy, Colin Slat
 
 \setDocAbstract{%
 Summary of cpu-time, memory, storage of DP0.2 production run in iDF.
+Over the course of 150 calendar days in 2021-2022, preliminary 
+Data Release Production (DRP) ran on 20,000 exposures of simulated Rubin data, 
+representing 10-20 full nights of images, covering 150 tracts (300 square degrees), to typically 5 year depth (50 returns to the same spot on the sky for
+each of 6 filters).  This 'half-percent' survey used a 
+compute cluster of approximately 4000 cores, each core with up 
+to 14 GB/core RAM available (less typically used)
+with jobs taking typically a few seconds to a fraction of an hour.  
+Small subsets (few percent) of the processing pipetasks used nodes with 
+up to 236 GB/core, and were allowed to run for up to 3 days.  The 
+input images were approximately 260TB in size, while the outputs, counting transient datasetTypes took up 3.4PB in an object store.  After removing transient
+datasetTypes (e.g. warps), the final storage used by DP0.2 was approximately
+2.5 PB.  Of the 150 calendar days, approximately 60 days were running and
+the remainder used for debugging.  Thus, to keep up with expected DRP during
+the course of the survey (6-12 days to process 10-20 nights of data), 
+a factor of 5-10 speed up (or increased core counts, or some combination
+of both) are estimated to be needed.
 }
 
 % Change history defined here.
@@ -137,12 +153,12 @@ days and many hundreds of GB to generate such quantum graphs and execution
 butlers.  Practically speaking, there is a limit of a few hours and a few GB
 for preparation of the quantum graph and execution butler.  
 
+\subsection{Clustering of pipetasks}
 A more serious limitation comes with the operation of the IDDS and how
 quanta are clustered (or not clustered).  The IDDS system has within it an $N^2$algorithm which matches jobs done to jobs-to-be-done.
 
 To use the Butler and PanDA workflow system in practice, some division of
 sets of pipetasks into groups is done.  Also, clustering sets of related, 
-isr,characterizeImage,calibrate,writeSourceTable,transformSourceTable
 one-after-the-other pipetasks (in step 1, for example the five pipetasks run on
 each exposure/detector in this order: {\bf isr} followed by 
 {\bf characterizeImage} followed by {\bf calibrate} followed by 
@@ -160,10 +176,11 @@ given in {\bf clustering.yaml} files in
 \url{https://github.com/lsst-dm/dp02-processing/tree/main/full/production} 
 for each step.  
 
+\section{PanDA queues}
 BPS submits in DP0.2 ran in the Google Cloud, and a set of 6 panDA job queues weere established with different retry characteristics and memory limits (cost
 to use computing in the cloud increased linearly with memory per job and also
 was a factor of several cheaper if the queue could be 'preempted' (forcing
-the job to run again from the start).  These queues are listed in \ref{tab:queues}. Due to this costing structure, cost efficient queue are 
+the job to run again from the start).  These queues are listed in Table \ref{tab:queues}. Due to this costing structure, cost efficient queue are 
 the pre-emptable low max memory queue, and the most expensive are the 
 non-preemptable high max memory queue. The default queue for BPS submits 
 is the {\bf GOOGLE$\_$TEST} (pre-emptable) queue and the vast majority 
@@ -173,58 +190,10 @@ job to be retried was pre-emption.  If the job failed the same way 5 times
 typically this indicated a pipeline problem, and these cases were
 fed back to the pipeline development team.
 
-A few pipetasks required more than the usually amount of memory, and
-these tasks were assigned to a higher max memory queue.  Also, a few 
-related Q/A pipetasks occasionally required exceedingly long runtimes on
-selected quanta, these were handled by a special 'rescue' submit job,
-with its own bps submit yaml which indicated to the butler to only run
-on quanta which did not previously complete, and indicated to panDA to run
-in a special non-preemptable (NO PE) queue. The pipetasks which required 
-extra memory or no-preempt status for at least some quanta are listed in
-table \ref{tab:maxmem}.  Also listed in \ref{tab:maxmem} are typical
-maximum memory requirements for most quanta running through an indicated
-pipetask.
-
-Storage for DP0.2 inputs and outputs was done using a large S3 compatible
-(key= unique POSIX-style path+filename plus bucket prefix, value=pointer
-to bytes of a data file or table) object store.   The dataSetType names for
-the types of objects which used the bulk of the storage are listed in
-\ref{tab:storage1} and continued in \ref{tab:storage2}.  Also listed
-for each dataSetType are estimates of the number of objects of a given type,
-the typical size of a single object of that type (in MB), the total
-storage for objects of that type (in TB), and which step in the processing
-creates objects of that type.  Also, if a datasetType is 'transient', and 
-is not retained once the downstream pipetasks which make use of that
-datasetType are complete, the datasetType is marked with a 'D' in the 'Delete'
-column.  For example, an important retained datasetType are the {\bf calexp} objects, representing a single exposure/detector corrected and calibrated
-ccd image.  Each {\bf calexp} takes about 101 MB of space, and there are 2.8M 
-in the DP0.2 dataset (20,000 exposures times 150 detectors/exposure, on average gives 3M as a rough estimate).  Note that which the full LSST camera has 189
-detectors, for DP0.2, on average only 150 of these are present per exposure.
-
-
 
 \begin{center}
-\begin{tabular} { |c|r|r|c|c|r|l|l|}
-\hline
-step & group by & N groups & start & end & core-hr & software & Note\\
-\hline
-step1 & visit/det & 14x3 &2022-12-18& 2022-01-12 & 166K & $\rm v23\_0\_0\_rc5$ &\\
-step2 & visit  & 14 & 2022-01-20& 2022-01-24 & 22K & $\rm v23\_0\_0\_rc5$ &\\
-step3 & tract & 33 & 2022-02-18& 2022-03-25 & 1100K & $\rm v23\_0\_1$ &\\
-step4 & visit & 40& 2022-04-01& 2022-04-30 & 1100K & $\rm v23\_0\_1\_rc4$ &\\
-step7 & all & 1 & 2022-05-01& 2022-05-01 & 10 & $\rm v23\_0\_2\_rc2$ &\\
-step5 & tract & 52 & 2022-05-03& 2022-05-12 & 66K & $\rm v23\_0\_2\_rc2$ &\\
-step6 & visit & 20&2022-05-12& 2022-05-16 & 16K & $\rm v23\_0\_2\_rc3$ &\\
-purge & exp/warp & 2 & 2022-04-01& 2022-05-30 & 10 & $\rm v23\_0\_2\_rc2$ & \\
-\hline
-total & & & 150d & & 2500K &&\\
-\hline
-\label{tab:summarycpu}
-\end{tabular}
-\end{center}
-
-
-\begin{center}
+\begin{table}[ht]
+\caption{PanDA queues used for DP0.2 processing}
 \begin{tabular} { |l|r|r|l|}
 \hline
 queue & maxMem(GB) & used by &  Note\\
@@ -236,11 +205,28 @@ $\rm DOMA\_LSST\_GOOGLE\_HIMEM\_NON\_PREEMPT$ & 40 & &\\
 $\rm DOMA\_LSST\_GOOGLE\_EXTRA\_HIMEM$ & 236 &  &\\
 $\rm DOMA\_LSST\_GOOGLE\_EXTRA\_HIMEM\_NON\_PREEMPT$ & 236 & &\\
 \hline
-\label{tab:queues}
 \end{tabular}
+\label{tab:queues}
+\end{table}
 \end{center}
 
+
+\section{Memory usage}
+
+A few pipetasks required more than the usually amount of memory, and
+these tasks were assigned to a higher max memory queue.  Also, a few 
+related Q/A pipetasks occasionally required exceedingly long runtimes on
+selected quanta, these were handled by a special 'rescue' submit job,
+with its own bps submit yaml which indicated to the butler to only run
+on quanta which did not previously complete, and indicated to panDA to run
+in a special non-preemptable (NO PE) queue. The pipetasks which required 
+extra memory or no-preempt status for at least some quanta are listed in
+Table \ref{tab:maxmem}.  Also listed in Table \ref{tab:maxmem} are typical
+maximum memory requirements for most quanta running through an indicated
+pipetask.
 \begin{center}
+\begin{table}[ht]
+\caption{Memory requirements for processing pipetasks}
 \begin{tabular} { |l|r|r|}
 \hline
 pipetask & reqMem(MB) &  Notes\\
@@ -274,12 +260,34 @@ matchCatalogsTract& 120000 & 236GB NO PE\\
 \hline
 consolidateForcedSourceOnDiaObjectTable& 18000& step 5 40 GB\\
 \hline
-\label{tab:maxmem}
 \end{tabular}
+\label{tab:maxmem}
+\end{table}
 \end{center}
 
 
+\section{Storage}
+
+Storage for DP0.2 inputs and outputs was done using a large S3 compatible
+(key= unique POSIX-style path+filename plus bucket prefix, value=pointer
+to bytes of a data file or table) object store.   The dataSetType names for
+the types of objects which used the bulk of the storage are listed in
+Table \ref{tab:storage}.  Also listed
+for each dataSetType are estimates of the number of objects of a given type,
+the typical size of a single object of that type (in MB), the total
+storage for objects of that type (in TB), and which step in the processing
+creates objects of that type.  Also, if a datasetType is 'transient', and 
+is not retained once the downstream pipetasks which make use of that
+datasetType are complete, the datasetType is marked with a 'D' in the 'Delete'
+column.  For example, an important retained datasetType are the {\bf calexp} objects, representing a single exposure/detector corrected and calibrated
+ccd image.  Each {\bf calexp} takes about 101 MB of space, and there are 2.8M 
+in the DP0.2 dataset (20,000 exposures times 150 detectors/exposure, on average gives 3M as a rough estimate).  Note that which the full LSST camera has 189
+detectors, for DP0.2, on average only 150 of these are present per exposure.
+
+
 \begin{center}
+\begin{table}
+\caption{Storage by datasetType}
 \begin{tabular} { |r|r|r|r|r|r|}
 \hline
 TB& Nobj & MB/obj & step & D & dataSetType \\
@@ -307,16 +315,19 @@ TB& Nobj & MB/obj & step & D & dataSetType \\
 5 &4.6M&1.2&step5&&	mergedForcedSourceOnDiaObject\\
 3.4&3.4M&1.0&step4&&	forced$\_$src\\
 3.4&2.8M&1.20&step1&&	sourceTable\\
-\hline
-\label{tab:storage1}
-\end{tabular}
-\end{center}
-
-\begin{center}
-\begin{tabular} { |r|r|r|r|r|r|}
-\hline
-TB&Nobj&MB/Obj&step&D& DataSetType (continued)\\
-\hline
+%\hline
+%%\end{tabular}
+%\label{tab:storage1}
+%\end{table}
+%\end{center}
+%
+%\begin{center}
+%\begin{table}
+%\caption{Storage (cont)}
+%\begin{tabular} { |r|r|r|r|r|r|}
+%\hline
+%TB&Nobj&MB/Obj&step&D& DataSetType (continued)\\
+%\hline
 2.4&2.8M&0.85&step1&&	icSrc\\
 1.6&10K&170&step3&&	objectTable\\
 1.3&2.6M&0.5&step6&&	calibratedSourceTable\\
@@ -339,17 +350,132 @@ TB&Nobj&MB/Obj&step&D& DataSetType (continued)\\
 0.02&20K&0.10&step2&&	visitSummary\\
 0&	1&316&step7&&	ccdVisitTable\\
 0&	1&2.4&step7&&	visitTable\\
-\hline
-0.4& 200 & 2000 & BPS &   & Exec Butler\\
-0.22& 200 & 1100 & BPS &   & qgraph \\
+%\hline
+%0.4& 200 & 2000 & BPS &   & Exec Butler\\
+%0.22& 200 & 1100 & BPS &   & qgraph \\
 \hline
 3.4PB(1.9PB)& & & & & Total in S3 without(with) Deletes\\
 \hline
-\label{tab:storage2}
 \end{tabular}
+\label{tab:storage}
+\end{table}
 \end{center}
 
 D: DataSetType deleted from Butler and Storage
+
+\section{Processing Summary}
+
+DP0.2 processing took place in 2021-2022, over the course of about 150
+calendar days.  Processing was done step-by-step, using the 7 pipetask
+sets defined by the pipeline team in the v23 release of the processing
+software distribution.  Work was done to break the exposures or tracts
+needed to be processed into managable {\bf groups}.  The size of each
+group in terms of numbers of exposures or tracts was set so that no
+quantum graph or execution butler generation took more than about 1
+hour per group, and so that no group's total run time exceeded
+approximately 1 day (24 hours).  Additionally, the panDA directive:
+{\rm maxJobsPerTask: 30000} was added to some steps BPS submit yaml
+files to allow panDA to break groups with large number of quanta into
+sets of no more than 30,000.  This allowed the IDDS job matching
+algorithm, which determines what outputs are ready to be fed in as
+inputs to the next pipetask in a set, to avoid taking excessive
+memory, as the memory usage and compute time scale as $N^2$ where $N$
+is the number of jobs in the task.  The limit of 30,000 allowed panDA
+IDDS to run on a machine with 12GB RAM.  Some trial-and-error was
+required to determine the optimal group size for each step.  Most
+quanta in a group ran for similar lengths of time and used similar
+amounts of memory, however, there were cases where a small percentage
+of quanta exceeded the default memory of a queue, or were repeatedly
+pre-empted as they ran too long (sometimes for days).  For these
+cases, nearly all in step 3 or step 5 processing, rescue bps workflow
+yamls were designed and higher memory queues or non-preempt queues
+were designated to allow the subset of failed quanta to have the
+resources needed to complete.
+
+\subsection{DP0.2 Campaign tracking}
+The preliminary operations campaign tools available in the {\bf
+  prodstatus} repo \url{https://github.com/lsst-dm/prodstatus} were
+used to monitor DP0.2 processing and record in a series of JIRA
+tickets, summary information about each group run for each of the
+seven DRP steps.   The original ticket requesting DP0.2 DRP processing is \url{
+  https://jira.lsstcorp.org/browse/PREOPS-905}, which contains extensive comments about issue that came up during processing. A document describing DP0.2 is available as \url{https://rtn-041.lsst.io/v/DM-17130/index.html}.
+
+Table \ref{tab:summarycpu} shows, for each step, whether the step is
+visit(exposure) or tract based, number of groups the visits or
+exposures are broken into, start and end dates for processing,
+approximate number of core-hours used, and a software version
+stamp. In total 2.5M core-hours were used (on a cluster with about
+4000 cores) over 150 calendar days.  Of these 150 days, approximately
+60 days were used for running, with most of the remaineder used for
+debugging and groupsize trial-and-error.  2.5M/4000/24 = 26 days, so
+cores were used at perhaps 45\% efficiency.
+
+The input dataset represents data typically gathered over 10-20
+observing nights.  DRP is required to process about 300 nights of data
+in 200 days, and so, 10-20 nights should be turned around in 6-12
+calendar days.  These very figures can be used to estimate rough
+factors by which the processing needs to be sped up or the number of
+cores increased or some combination of the two.  Roughly a factor of
+5-10 speed up or size up is needed.
+
+
+\begin{center}
+\begin{table}[ht]
+\caption{Summary of DP0.2 cpu usage by step}
+\begin{tabular} { |c|r|r|c|c|r|l|l|}
+\hline
+step & group by & N groups & start & end & core-hr & software & Note\\
+\hline
+step1 & visit/det & 14x3 &2022-12-18& 2022-01-12 & 166K & $\rm v23\_0\_0\_rc5$ &\\
+step2 & visit  & 14 & 2022-01-20& 2022-01-24 & 22K & $\rm v23\_0\_0\_rc5$ &\\
+step3 & tract & 33 & 2022-02-18& 2022-03-25 & 1100K & $\rm v23\_0\_1$ &\\
+step4 & visit & 40& 2022-04-01& 2022-04-30 & 1100K & $\rm v23\_0\_1\_rc4$ &\\
+step7 & all & 1 & 2022-05-01& 2022-05-01 & 10 & $\rm v23\_0\_2\_rc2$ &\\
+step5 & tract & 52 & 2022-05-03& 2022-05-12 & 66K & $\rm v23\_0\_2\_rc2$ &\\
+step6 & visit & 20&2022-05-12& 2022-05-16 & 16K & $\rm v23\_0\_2\_rc3$ &\\
+purge & exp/warp & 2 & 2022-04-01& 2022-05-30 & 10 & $\rm v23\_0\_2\_rc2$ & \\
+\hline
+total & & & 150d & & 2500K &&\\
+\hline
+\end{tabular}
+\label{tab:summarycpu}
+\end{table}
+\end{center}
+
+The JIRA issues which record the the bps submit yamls for each group
+within each of the outputs of {\rm prodstatus} tracking of DP0.2
+processing are linked from JIRA issue
+\url{https://jira.lsstcorp.org/browse/DRP-473}.  From this head
+campaign-level issue, one can access the 7 individual step-level
+issues, and from each of these in turn, the individual BPS submit
+workflow groups can be accessed.  Information on the time-to-run, max
+memory used per pipetask are drawn from butler and panDA records and
+are recorded alone with overall ID information and links to the panDA
+workflow IDDS webpages.
+
+\section{Summary}
+Over the course of 150 calendar days in 2021-2022, preliminary Data
+Release Production (DRP) processing ran in the iDF on about 20,000
+exposures of simulated Rubin data, representing 10-20 full nights of
+images, covering 150 tracts (300 square degrees), to typically 5 year
+depth (50 returns to the same spot on the sky for each of 6 filters).
+This 'half-percent' survey used a Google cloud compute cluster of
+approximately 4000 cores, each core with (normally) up to 14 GB/core
+RAM available (less typically used) with jobs taking typically a few
+seconds to a fraction of an hour.  Small subsets (afew percent) of the
+processing pipetasks used nodes with up to 236 GB/core, and were
+allowed to run for up to 3 days.  The input images were approximately
+260 TB in size, while the outputs, counting transient datasetTypes,
+expanded to 3.4 PB in an object store.  After removing transient
+datasetTypes (e.g. warps), the final storage used by DP0.2 was
+approximately 2.5 PB.  Of the 150 calendar days, approximately 60 days
+were running and the remainder used for debugging and development.
+
+Thus, to keep up with expected DRP during the course of the survey
+(6-12 days to process 10-20 nights of data), a factor of 5-10 speed up
+(or increased core counts, or some combination of both) are estimated
+to be needed.   
+
 
 \appendix
 % Include all the relevant bib files.
