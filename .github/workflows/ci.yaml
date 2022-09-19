@@ -6,13 +6,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     
-    apt_packages: pandoc
-
     steps:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 0 # full history for metadata
           submodules: true
+
+      - uses: docker://pandoc/latex:2.9
 
       - name: Set up Python
         uses: actions/setup-python@v2
