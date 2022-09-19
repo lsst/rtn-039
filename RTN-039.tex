@@ -77,7 +77,7 @@ set of approximately 20,000 Rubin camera simulated exposures (each with up to
 189 detectors per exposure) covering 157 tracts 
 (300 square degrees) in 6 filters ($ugrizy$) to a typical 
 depth of half that of the full survey.  These 20K visits represent 
-approximately 10 nights of data gathering, roughly 1% of the 
+approximately 10 nights of data gathering, roughly 0.5\% of the 
 full survey.
 
 Processing of the DESC-generated DC-2 simulated dataset \citep{DESC} took place between Dec 18, 2021 and May 16, 2022.  Processing took place in a Google Cloud environment, named the iDF (Interim Data Facility).  In excess of 4,000 cores
@@ -118,12 +118,11 @@ to change during DP0.2.
 
 The workflow software system was \cite{PanDA}, and the 
 BPS (Batch Processing Service) software 
-(part of the LSST distribution) was used interface between the Butler 
+(part of the LSST distribution) was used to interface between the Butler 
 and PanDA using a set of {\bf yaml} job submission files 
-(one for each group of each step of processing, see below)
-and the PanDA system. In addition, the Google Cloud logging system was
+(one for each group of each step of processing, see below). In addition, the Google Cloud logging system was
 used to collect logging information output by the production pipelines and
-organize it into a searchable form.
+organize it into a searchable form sorted by date of production.
 
 \section{Processing Groups and clustering directives}
 
@@ -142,7 +141,7 @@ thus resulting in 20K*150*5 = 15M individual quanta of processing for
 step 1.  
 
 A key component of the PanDA workflow system is the "Intelligent Data Delivery Service" (IDDS) which manages the scheduling of individual processing
-quanta to a set of comprocessing cores. The BPS and step description yaml configurations guide the creation of a "quantum graph" which fully describes the job flow
+quanta to a set of processing cores. The BPS and step description yaml configurations guide the creation of a "quantum graph" which fully describes the job flow
 dependencies (what tasks depend on what other tasks being complete).  Also
 created at the same time as the quantum graph for each 'BPS submit', is a
 so-called 'execution butler' which contains file metadata and 
@@ -158,7 +157,7 @@ and execution butler was prohibitive,
 it would still take days and many hundreds of GB to generate such 
 quantum graphs and execution butlers.  Practically speaking, 
 there is a limit of a few hours and a few GB for preparation of and size of 
-the quantum graph and execution butler.  
+the quantum graph and execution butler for a single BPS submission.  
 
 \subsection{Clustering of pipetasks}
 A second limitation on how large a workflow can be accomodated in one
@@ -173,7 +172,7 @@ sets of pipetasks into groups is done.  Also, clustering sets of related,
 one-after-the-other pipetasks (in step 1, for example the five pipetasks are 
 run on each exposure/detector in this order: {\bf isr} followed by 
 {\bf characterizeImage} followed by {\bf calibrate} followed by 
-{\bf writeSourceTable}) followed by  {\bf transformSourceTable}.  Since this
+{\bf writeSourceTable} followed by  {\bf transformSourceTable}).  Since this
 dependence structure is fixed and invariant it helps to reduce the load 
 on IDDS if these five pipetasks are clustered into one pipetask, 
 called {\bf visit$\_$focal$\_$plane$\_$1}.  While IDDS generally 
@@ -184,7 +183,7 @@ having some ordered lists of pipetasks combined into a clustered task
 allows IDDS to not have to match everything against everything in these
 cases.  There are also savings in complexity in generating the
 quantum graph in these cases.
-Since the order and set pipetasks is fixed and every output always 
+Since the order and set of pipetasks is fixed and every output always 
 flows to the next pipetask's input, IDDS need not try to match every 
 possible pipetask {\bf B} to follow on from pipetask {\bf A}, thus greatly 
 reducing the number of possible combinations panDA IDDS needs to 
@@ -198,10 +197,10 @@ for each step.
 \section{PanDA queues}
 BPS submissions in DP0.2 ran in the Google Cloud, and a set of six panDA job 
 queues weere established with different retry characteristics and 
-memory limits (the cost to use computing in the cloud increases 
-linearly with memory per job and also was a factor of 
-several cheaper if the queue could be 'preempted' (forcing the job 
-to run again from the start).  
+memory limits.  The cost to use computing in the cloud increases 
+linearly with maximum memory allocated per job and also computing is a 
+factor of several times cheaper if the queue could 
+be 'preempted' (forcing the job to run again from the start).  
 These queues are listed in Table \ref{tab:queues}. Due to this 
 structure, the cheapest queue is the pre-emptable lowest max 
 memory queue, and the most expensive is the 
@@ -211,10 +210,16 @@ of jobs completed successfully in this queue.  The maximum number of
 retries allowed was set by default to be 5, and the usual reason for a 
 job to be retried was preemption.  If a job failed exactly the same 
 way 5 times typically this indicated a pipeline problem, 
-and these cases were fed back to the pipeline development team. 
-If a job failed 5 times at different points, this suggests repeated
-preemption, and suggests a rescue submission may be needed running with
-a higher max memory or in a non-preempt queue.
+and these cases were fed back to the pipeline development team for investigation. 
+If a long running job failed 5 times at different points in 
+the processing, this often indicates rather a repeated preemption, 
+and suggests a {\bf rescue} submission may be needed running with a 
+higher max memory or in a non-preempt queue.
+
+The special queue, GOOGLE$\_$MERGE, is used for merging output metadata 
+and objects (image files, catalogs) back into the main Butler registry (for
+metadata) with links to these objects recorded in the object store portion
+of the Butler. 
 
 \begin{center}
 \begin{table}[ht]
@@ -298,9 +303,10 @@ Storage for DP0.2 inputs and outputs was done using a large S3 compatible
 to bytes of a data file or table) object store in the Google Cloud.   
 The datasetType names for the types of objects which used the bulk 
 of the storage are listed in Table \ref{tab:storage}.  Also listed
-for each datasetType are estimates of the number of objects of a given type,
-the typical size of a single object of that type (in MB), the total
-storage for objects of that type (in TB), and which step in the processing
+for each datasetType are estimates of the number of DP0.2 objects of 
+a given type, the typical size of a single object of 
+that type (in MB), the total DP0.2 storage for objects of 
+that type (in TB), and which step in the processing
 creates objects of that type.  Also, if a datasetType is transient, and 
 is not retained once the downstream pipetasks which make use of that
 datasetType are complete, the datasetType is marked with a 'D' in the 'Delete'
@@ -314,6 +320,9 @@ in the DP0.2 dataset (20,000 exposures times 150 detectors/exposure, on average,
 input dataset).  Note that which the full LSST camera has 189 
 detectors, for DP0.2, on average only 150 of these are present per exposure,
 though some exposures do have all 189 detectors present in DP0.2.
+Recall that in rough approximation for some subset of data production
+and data products,  DP0.2 represents one-half of one percent 
+(1/200th) of the full LSST.
 
 
 \begin{center}
@@ -403,51 +412,57 @@ quantum graph or execution butler generation took more than about 1
 hour per group, and so that no group's total run time exceeded
 approximately 1 day (24 hours).  
 Additionally, the panDA directive:
-{\rm maxJobsPerTask: 30000} was added to some steps' BPS submit yaml
+{\rm maxJobsPerTask: 30000} was added to some {\bf step's} BPS submit yaml
 files to allow panDA to break groups with large number of quanta into
 sets of no more than 30,000.  This allowed the IDDS job matching
 algorithm, which determines what outputs are ready to be fed in as
 inputs to the next pipetask in a set, to avoid taking excessive
 memory, as the memory usage and compute time scale as $N^2$ where $N$
 is the number of jobs in the task.  The limit of 30,000 allowed panDA
-IDDS to run on a machine with 12GB RAM.  Some trial-and-error was
-required to determine the optimal group size for each step.  Most
-quanta in a group ran for similar lengths of time and used similar
-amounts of memory, however, there were cases where a small percentage
-of quanta exceeded the default memory of a queue, or were repeatedly
-pre-empted as they ran too long (sometimes for days).  For these
+IDDS to run on a machine with 12GB RAM ($30000^2 \sim 1G$).  
+Some trial-and-error was required to determine the optimal group 
+size, in visits (steps 1,2, 4) or tracts (steps 3,5,6,7), for each {\bf step}.  
+Most quanta in a group ran for similar lengths of time and used similar
+amounts of memory.  There were, however, cases where a small percentage
+of quanta exceeded the default memory of a queue and hung, or were repeatedly
+pre-empted as they ran too long (sometimes for days), some of the Quality
+Assurance metric tasks fell into this category.  For these
 cases, nearly all in step 3 or step 5 processing, rescue BPS workflow
-yamls were designed and submitted to higher memory queues or 
-non-preempt queues to allow the subset of failed quanta to have the
+yamls were designed and submitted to higher max memory queues or 
+to non-preempt queues to allow the subset of failed quanta to have the
 resources needed to complete.
 
 \subsection{DP0.2 Campaign tracking}
+
 The preliminary operations campaign tools available in the {\bf
-  prodstatus} repo \url{https://github.com/lsst-dm/prodstatus} were
-used to monitor DP0.2 processing and record in a series of JIRA
-tickets, summary information about each group run for each of the
-seven DRP steps.   The original ticket requesting DP0.2 DRP processing is \url{
-  https://jira.lsstcorp.org/browse/PREOPS-905}, which contains 
-  extensive comments about issues that came up during processing. 
-  A document describing DP0.2 in some detail is available 
-  as \url{https://rtn-041.lsst.io/v/DM-17130/index.html}.
+prodstatus} repo \url{https://github.com/lsst-dm/prodstatus} were
+used to monitor DP0.2 processing and record compute resource metrics in 
+a series of JIRA tickets, summarizing information about each group 
+run for each of the seven DRP steps.   The original ticket 
+requesting DP0.2 DRP processing is 
+\url{https://jira.lsstcorp.org/browse/PREOPS-905}, which contains 
+extensive comments about issues that came up during processing. 
+A document describing the DP0.2 campaign in some detail is available 
+as \url{https://rtn-041.lsst.io/v/DM-17130/index.html}.
 
 Table \ref{tab:summarycpu} shows, for each step, 1) whether the step is
-exposure or tract based, 2) the number of groups the visits or
-exposures are broken into, 3) start and end dates for processing,
-4) approximate number of core-hours used, and 5) a software version
-stamp. In total, about 2.5M core-hours were used (on a cluster with about
+exposure(visit) or tract based, 2) the number of groups the exposures or
+tracts are broken into, 3) the starting and ending calendar dates 
+for processing, 4) the approximate number of core-hours used, and 
+5) a software version stamp. 
+In total, about 2.5M core-hours were used (on a cluster with about
 4000 cores) over 150 calendar days.  Of these 150 days, approximately
 60 days were used for running, with most of the remainder used for
 debugging, rescue design, and group sizing trial-and-error.  
 2.5M/4000/24 = 26 days, so cores were used at less than 50\% efficiency.
 
 The input dataset represents data typically gathered over 10-20
-observing nights.  DRP is required to process about 300 nights of data
-in 200 days, and so, 10-20 nights should be turned around in 6-12
+observing nights.  DRP is required to process (not considering cumulative
+reprocessing here) about 300 nights of data in 200 days, 
+and so, 10-20 nights should be turned around in 6-12
 calendar days.  These very approximate figures can be used to estimate rough
 factors by which the processing needs to be sped-up or the factor by
-which the number of cores needs to be increased 
+which the number (or efficiency) of cores needs to be increased 
 (or some combination of the two).  Roughly a factor of 5-10 speed 
 up or size up is estimated to be needed.
 
@@ -475,17 +490,19 @@ total & & & 150d & & 2500K &&\\
 \end{table}
 \end{center}
 
-The JIRA issues which record the the bps submit yamls for each group
-within each of the outputs of {\rm prodstatus} tracking of DP0.2
+The JIRA issues which record the {\bf BPS} submit yamls for each group
+within each of the {\bf steps} of {\rm prodstatus} tracking of DP0.2
 processing are linked from JIRA issue
 \url{https://jira.lsstcorp.org/browse/DRP-473}.  From this 
-campaign-level issue, one can access the seven individual step-level
+{\bf campaign-level} issue, one can access the seven individual {\bf step-level}
 issues, and from each of these in turn, the individual BPS submit
-workflow groups can be accessed, with one JIRA issue per BPS submission.  
-Information on the number of quanta, the time-to-run, the max memory used 
-per pipetask among other metrics are drawn from Butler and PanDA tables 
-and are recorded along with a BPS processing ID and links to the panDA
-workflow IDDS webpages.
+workflow groups can be accessed, with one JIRA issue per BPS submission. 
+Several hundred BPS submissions make up the complete DP0.2 campaign.
+For each of these, information on the number of quanta, 
+the time-to-run, the max memory used per pipetask among 
+other metrics are drawn from Butler and PanDA tables and are 
+recorded along with a uniquely-identifying BPS processing timestamp ID, 
+and links to the panDA workflow IDDS webpages.
 
 \section{DP0.2 wallclock estimates compared with DRP requirements}
 
@@ -494,11 +511,11 @@ Release Production (DRP) processing ran in the iDF on about 20,000
 exposures of simulated Rubin data, representing 10-20 full nights of
 images, covering 150 tracts (300 square degrees), to typically 5 year
 depth (50 returns to the same spot on the sky for each of 6 filters).
-This 'half-percent' survey used 2.5M core-hours on a Google cloud compute 
+This half-percent survey used 2.5M core-hours on a Google cloud compute 
 cluster of approximately 4000 cores, each core with (normally) up 
 to 14 GB/core RAM available (less typically used) with jobs 
 taking typically a few seconds to a fraction of an hour per quanta.  
-Small subsets (afew percent) of the processing pipetasks used nodes 
+Small subsets (a few percent) of the processing pipetasks used nodes 
 with up to 236 GB/core, and were allowed to run for up to 3 days.  
 The input images were approximately 260 TB in size, while the outputs, 
 counting transient datasetTypes, expanded to 3.4 PB in an object store.  
@@ -507,10 +524,10 @@ used by DP0.2 was approximately 2.5 PB.  Of the 150 calendar days,
 approximately 60 days were running and the remainder used for 
 debugging and development.
 
-Thus, to keep up with expected DRP during the course of the survey
+Thus, to keep up with expected DRP during the initial stages of the survey
 (6-12 days to process 10-20 nights of data), a factor of 5-10 speed up
-(or increased core counts, or some combination of both) are estimated
-to be needed.   
+(or increased core counts or efficiency, or some combination of both) 
+are estimated to be needed.   
 
 
 \appendix
