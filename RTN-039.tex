@@ -42,7 +42,7 @@ available (less typically used) with jobs taking typically
 a few seconds to a fraction of an hour.  
 Small subsets (a few percent) of the processing pipetasks used nodes with 
 up to 236 GB/core, and were allowed to run for up to 3 days.  The 
-input images were approximately 260TB in size, while the outputs, counting transient datasetTypes took up 3.4PB in an object store.  After removing transient
+input images were approximately 75TB in size, while the outputs, counting transient datasetTypes took up 3.4PB in an object store.  After removing transient
 datasetTypes (e.g. warps), the final storage used by DP0.2 was approximately
 2.5 PB.  Of the 150 calendar days, approximately 60 days were running and
 the remainder used for debugging.  Thus, to keep up with expected DRP during
@@ -332,7 +332,7 @@ and data products,  DP0.2 represents one-half of one percent
 \hline
 TB& Nobj & MB/obj & step & D & dataSetType \\
 \hline
-260 & 2.9M & 90 & input & & raw \\
+75 & 2.9M & 26 & input & & raw \\
 \hline
 506&5.1M&104&step3&D&deepCoadd$\_$directWarp\\
 506&2.2M&230&step4&&	goodSeeingDiff$\_$templateExp\\
@@ -517,7 +517,7 @@ to 14 GB/core RAM available (less typically used) with jobs
 taking typically a few seconds to a fraction of an hour per quanta.  
 Small subsets (a few percent) of the processing pipetasks used nodes 
 with up to 236 GB/core, and were allowed to run for up to 3 days.  
-The input images were approximately 260 TB in size, while the outputs, 
+The input images were approximately 75 TB in size, while the outputs, 
 counting transient datasetTypes, expanded to 3.4 PB in an object store.  
 After removing transient datasetTypes (e.g. warps), the final storage 
 used by DP0.2 was approximately 2.5 PB.  Of the 150 calendar days, 
